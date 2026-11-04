@@ -1,0 +1,39 @@
+# Credentials: never commit (D-035)
+*.json
+!**/schemas/**/*.json
+!**/fixtures/**/*.json
+.gcp/
+*key*.json
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Airflow and Docker local state
+logs/
+airflow.db
+pgdata/
+
+# Local data, raw payloads belong in GCS
+data/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# Personal planning files live outside this repo (D-044)
+notion-*.csv
+planejamento/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
