@@ -775,3 +775,27 @@ From Thyago's screenshots of the bucket details page:
 ### Agent defaults still open (Stage 4)
 
 None.
+
+### Stage 4 consolidated summary
+
+Closed 2026-11-03, three days before the planned date for task P2. Format: context → alternatives → choice → expected consequence → how I would know I was wrong.
+
+**1. Write-once raw, enforced by IAM (D-043, D-046)**
+- Context: The spec says raw is never edited. Code alone cannot guarantee that.
+- Alternatives: Storage Object Admin on the bucket.
+- Choice: `bsi-ingest` has Storage Object Creator and Storage Object Viewer on the raw bucket only, and no project roles. A changed source file lands under a new fetch-date path.
+- Expected consequence: No bug can rewrite or delete a raw payload. Every version of a source file is kept for replay.
+- How I would know I was wrong: Legitimate re-ingestion keeps failing on name collisions.
+
+**2. Bucket and key (D-047, D-048)**
+- Choice: `brazil-startup-intel-513701-raw` in `us-central1`, Standard, public access prevention on, uniform access, versioning off. JSON key stored outside the repo and outside synced folders.
+- How I would know I was wrong: A key file appears in `git status`, or storage passes the free tier early.
+
+**3. What is public (D-044, D-045)**
+- Context: The repository is public.
+- Alternatives: Keeping personal files in the folder behind `.gitignore`. Publishing the full decision log.
+- Choice: Personal planning files live outside the repo. The public `decisions.md` is technical only. The first commit holds five files: `.gitignore`, `README.md`, `decisions.md`, `plan.md`, `spec.md`.
+- Expected consequence: Nothing personal can be pushed by mistake.
+- How I would know I was wrong: The public and private logs drift apart, or a technical decision is missing from the public one.
+
+**Repository:** https://github.com/thyagomanhaes/brazil-startup-intel (public, first commit on 2026-11-03).

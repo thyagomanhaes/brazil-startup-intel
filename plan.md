@@ -52,12 +52,12 @@ brazil-startup-intel/
 
 ## Week 1: setup (2026-11-02 to 2026-11-07)
 
-Week 1 covers account and repository setup. P1 was done on 2026-11-03, and P2 started the same day.
+Week 1 covers account and repository setup. P1 and P2 were both done on 2026-11-03.
 
 | Day | Task | Done when |
 |---|---|---|
 | Tue 03/11 (moved up from Thu 05/11) | **P1.** Create the GCP account (personal Google account, free trial) and project `brazil-startup-intel`. Create a US$ 25/month alerts-only budget on gross cost before enabling any API (D-036, D-037, D-038) | Done 2026-11-03. Budget R$ 1,000/month, promotional credits excluded, alerts to billing admins and project owners. Trial ends 2027-02-02 (D-041) |
-| Fri 06/11 | **P2.** Create the private raw bucket in `us-central1` (D-042) with uniform access, in project `brazil-startup-intel-513701`. Create the service account with write access to that bucket only, and its key, stored outside the repo (D-034, D-035). Add key patterns to `.gitignore`. Create the public GitHub repo with this layout | `gsutil ls` on the bucket works with the service account. `git status` never shows the key. If key creation is blocked by policy, reopen D-034 |
+| Tue 03/11 (moved up from Fri 06/11) | **P2.** Raw bucket `brazil-startup-intel-513701-raw` in `us-central1`. Service account `bsi-ingest` with Object Creator and Object Viewer on that bucket only. Key outside the repo. Public repo with the docs (D-042 to D-048) | Done 2026-11-03. https://github.com/thyagomanhaes/brazil-startup-intel |
 
 ## Week 2: raw ingestion (2026-11-09 to 2026-11-14)
 
