@@ -911,3 +911,53 @@ Closed 2026-11-04, five days before the planned date for T1. Format: context →
 - Choice: A `tests` container that waits for a healthy database and reads its target from `DATA_PG_DSN`. Short tracebacks, so secrets stay out of failure output.
 - Expected consequence: `docker compose --profile test run --rm tests` gives the same answer on any machine, and later in CI.
 - How I would know I was wrong: The test loop is slow enough that tasks skip the red step.
+
+---
+
+## Stage 6: Task T2, CNPJ source check (2026-11-04, moved up from 2026-11-10)
+
+### Findings from secondary sources, pending Thyago's check in `docs/sources/cnpj.md`
+
+- **A-004 likely fails.** A third-party loader reported monthly folders starting at 2023-05. If confirmed, CNPJ history starts at the oldest folder on the share, and the 2022-07-01 cutoff (D-017) applies to CVM data only. This is the fallback already written in `plan.md`.
+- **A-003 partly confirmed.** The partner CPF is published masked, with the first three digits and the two check digits hidden (art. 129 § 2, Lei 13.473/2017). An age bracket column exists. Exact column names and codes still to confirm in the layout PDF.
+- **Volume.** About 6.8 GB zipped per monthly release (2026-01), 37 files. Three months (D-029) is about 20 GB in GCS, above the 5 GB Cloud Storage free tier. At US$ 0.020 per GB-month in us-central1, the extra 15 GB costs about US$ 0.30 per month, far below the R$ 1,000 budget (D-036). The price per GB is the agent's recollection and is to be checked against the pricing page.
+- **Download time.** Each month is about 6.8 GB through the home connection (D-027). The check "one month downloads in one evening" in `plan.md` now has a size to measure against.
+
+### AD-041: Every CNPJ column is text (agent default)
+
+- **Context:** Receita Federal started issuing alphanumeric CNPJs for new registrations on 2026-07-31. Existing numeric CNPJs do not change.
+- **Choice:** `cnpj_basico`, `cnpj_ordem` and `cnpj_dv` are `text` in every layer, in the watchlist and in API paths. Never integer.
+- **Why the agent picked it:** Young companies, the ones raising money through crowdfunding, are the most likely to have new alphanumeric CNPJs. An integer column would reject them or silently drop leading zeros.
+- **Consequence:** T7 DDL uses `text` with a check on length. Validation for the new format comes when the official validation rules are read.
+- **Source:** https://agenciagov.ebc.com.br/noticias/202607/implantacao-do-cnpj-alfanumerico-ocorrera-a-partir-de-31-de-julho
+- **Thyago must confirm.**
+
+### Checks closed on 2026-11-04
+
+- **A-004: failed, as expected.** Thyago checked the share: oldest folder 2023-05, newest 2026-10. CNPJ history starts at 2023-05. The 2022-07-01 cutoff in D-017 now applies to CVM data only. Per-issuer replays (D-026) can go back to 2023-05 at most.
+- **A-003: closed for the column list.** Thyago checked the partner layout: 11 columns, including the partner document (masked CPF), the legal representative's CPF and name, and the age bracket. The exact CPF mask and the age bracket codes are read from real rows in T8.
+- **Release size:** 37 files, 7.3 GB zipped for 2026-10 (Thyago).
+- **File format (agent, on `Cnaes.zip` from 2026-10):** semicolon separator, every field double-quoted, Latin-1 encoding, no header row, LF line endings, member file named without a `.csv` extension. 12 of 1,359 rows have a semicolon inside a quoted field, so the loader needs a real CSV parser (COPY with `FORMAT csv`), never a split on `;`.
+
+### D-052: The legal representative's CPF and name are dropped in standardized
+
+- **Status:** Decided by Thyago, 2026-11-04. He chose "Drop in standardized", the agent's recommendation.
+- **Question asked by the agent:** The partner layout also has the legal representative's CPF and name. D-017 allows only the partner's name as personal data. Where do the representative columns stop?
+- **Choice:** `legal_rep_document` and `legal_rep_name` follow the same rule as the partner's masked CPF and age bracket (D-018). Kept in raw for replay, dropped in standardized, never in curated, BigQuery, the API or the dashboard. The T10 leak test covers all four columns.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Option not chosen:** Keep the representative's name in curated like the partner's name, and drop only the CPF.
+- **Trade-off:** The API cannot say who legally represents a partner company. No business question in D-016 needs it.
+
+### Agent defaults to review (Stage 6)
+
+#### AD-042: Empty partner documents in the partner key (agent default)
+
+- **Context:** The layout says foreign partners have no document. D-031 puts the masked document in the partner key, and a primary key cannot hold NULL.
+- **Choice:** In the raw partner table, an empty document is stored as an empty string, never NULL, so the composite key in D-031 still works.
+- **Thyago must confirm.**
+
+#### AD-043: English column names from the first raw layer (agent default)
+
+- **Choice:** Raw tables use English snake_case names mapped one to one from the layout (`partner_name`, `partner_since`, `age_bracket`, and so on), as listed in `docs/sources/cnpj.md`. The original layout name stays in the column comment.
+- **Why the agent picked it:** The repo, the API and the dashboard are in English. One naming convention from raw to curated.
+- **Thyago must confirm.**

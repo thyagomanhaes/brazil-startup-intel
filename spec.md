@@ -49,7 +49,7 @@ Partner names appear in the API only. The public dashboard shows companies, offe
 | Public offer pages of crowdfunding platforms | Web scraping | Hourly | Hundreds of pages | Public pages only, robots.txt and terms respected (D-010), max 30 requests per minute per domain (D-007) |
 | Simulated enrichment provider | Webhooks | Event-driven | Low | Exercises signature checks, retries, DLQ and replay |
 
-History starts at 2022-07-01, when CVM Resolution 88 took effect (D-017).
+History starts at 2022-07-01, when CVM Resolution 88 took effect (D-017). CNPJ history starts at 2023-05, the oldest release on the Receita share (A-004, checked 2026-11-04).
 
 ## 5. Architecture
 
@@ -80,7 +80,7 @@ GCS is the hand-off between cloud workers and the laptop (D-006). Every payload 
 |---|---|---|---|
 | Raw (GCS) | `gs://<bucket>/raw/<source>/<yyyy>/<mm>/<dd>/<hh>/` | Files, HTML, webhook JSON and LLM outputs exactly as received | Write once. Never edited. Object metadata records source, fetch time and checksum |
 | Raw (Postgres) | `raw` schema | One table per source, loaded from GCS | Idempotent upsert on natural key plus source object ID |
-| Standardized | `standardized` schema, dbt | Typed, renamed, deduplicated. Masked CPF and age bracket dropped (D-018) | dbt tests on keys and accepted values |
+| Standardized | `standardized` schema, dbt | Typed, renamed, deduplicated. Partner document, age bracket, and legal representative CPF and name dropped (D-018, D-052) | dbt tests on keys and accepted values |
 | Curated | `curated` schema, dbt | Marts for the three business questions and the company detail | dbt model contracts enforced |
 
 ## 7. Reliability requirements
@@ -101,7 +101,7 @@ Thresholds in this table are agent defaults (AD-019) until Thyago confirms them.
 
 - dbt model contracts on every curated model. A column type or name change fails the build.
 - Pydantic schema for LLM extraction output. Invalid outputs go to a quarantine table with the raw PDF reference, never into standardized.
-- A test fails the build if masked CPF or age bracket appear in any standardized or curated model (D-018).
+- A test fails the build if `partner_document`, `legal_rep_document`, `legal_rep_name` or `age_bracket` appear in any standardized or curated model (D-018, D-052).
 - Row count reconciliation between Postgres curated and BigQuery after each copy (D-014).
 
 ## 9. Out of scope (D-017)
