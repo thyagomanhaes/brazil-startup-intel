@@ -1016,19 +1016,40 @@ Closed 2026-11-04, six days before the planned date for T2. AD-036 to AD-043 con
 
 ### Agent defaults to review (Stage 7)
 
-#### AD-044: Path validation rules (agent default)
+#### AD-044: Path validation rules (agent default, confirmed by Thyago 2026-11-04)
 
 - **Choice:** `object_path()` raises `ValueError` for an unknown source (allowed: `cnpj`, `cvm_registry`), a period that is not `YYYY-MM` or `YYYY-MM-DD` with a real month and day, and a filename that is empty, `..`, or contains `/` or `\`.
 - **Why the agent picked it:** Paths are the only key into write-once raw. A bad path written once stays forever (D-043).
-- **Thyago must confirm.**
+- **Status:** Confirmed by Thyago, 2026-11-04. No rationale of his own stated beyond confirming.
 
-#### AD-045: Package in `src/bsi`, found by pytest through `pyproject.toml` (agent default)
+#### AD-045: Package in `src/bsi`, found by pytest through `pyproject.toml` (agent default, confirmed by Thyago 2026-11-04)
 
 - **Choice:** Code lives in `src/bsi/`. `pyproject.toml` sets pytest's `pythonpath` to `src`, so tests import `bsi` without installing it.
-- **Thyago must confirm.**
+- **Status:** Confirmed by Thyago, 2026-11-04. No rationale of his own stated beyond confirming.
 
-#### AD-046: 8 MiB read chunks (agent default)
+#### AD-046: 8 MiB read chunks (agent default, confirmed by Thyago 2026-11-04)
 
 - **Choice:** `sha256_stream()` reads 8 MiB at a time by default.
 - **Why the agent picked it:** Memory stays flat for any file size. 8 MiB is a multiple of 256 KiB, the chunk unit GCS resumable uploads require, so the same size can be reused in T4.
-- **Thyago must confirm.**
+- **Status:** Confirmed by Thyago, 2026-11-04. No rationale of his own stated beyond confirming.
+
+### Stage 7 consolidated summary
+
+Closed 2026-11-04, seven days before the planned date for T3. AD-044 to AD-046 confirmed by Thyago the same day. TDD: the first run failed with `No module named 'bsi.gcs_ingest'`, then the agent wrote the module and ran the 21 test cases green before handing it over. Format: context → alternatives → choice → expected consequence → how I would know I was wrong.
+
+**1. One path per fetch (D-046, D-054, AD-044)**
+- Context: The raw bucket is write-once (D-043). A path that collides with an earlier fetch fails, and a bad path stays forever.
+- Alternatives: Date-only fetch keys.
+- Choice: `raw/<source>/<period>/fetched=<UTC timestamp to the second>/<filename>`, with strict validation of source, period, timezone and filename.
+- Expected consequence: Two fetches never collide. A wrong argument fails in code, before anything reaches GCS.
+- How I would know I was wrong: Two fetches in the same second collide, or a valid source period format gets rejected.
+
+**2. Hash before upload (D-053, AD-046)**
+- Context: Release files are up to about 1 GB each, downloaded over a home connection.
+- Alternatives: Streaming straight from Receita to GCS.
+- Choice: Download to a temp file, hashing in 8 MiB chunks in the same pass, then upload.
+- Expected consequence: Flat memory use, a checksum known before upload, and upload retries without re-downloading.
+- How I would know I was wrong: Disk fills up, or temp files pile up after failed runs.
+
+**3. Code layout (AD-045)**
+- Choice: Package in `src/bsi`, found by pytest through `pyproject.toml`.
