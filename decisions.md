@@ -1053,3 +1053,63 @@ Closed 2026-11-04, seven days before the planned date for T3. AD-044 to AD-046 c
 
 **3. Code layout (AD-045)**
 - Choice: Package in `src/bsi`, found by pytest through `pyproject.toml`.
+
+---
+
+## Stage 8: Task T4, upload only new content (2026-11-04, moved up from 2026-11-12)
+
+### D-055: Upload tests run against a GCS emulator
+
+- **Status:** Decided by Thyago, 2026-11-04. He chose "Emulator container", the agent's recommendation.
+- **Question asked by the agent:** How do the upload tests exercise GCS without touching the real bucket?
+- **Choice:** `fake-gcs-server` runs in compose behind the `test` profile. The `tests` service sets `STORAGE_EMULATOR_HOST`, so the real `google-cloud-storage` client talks HTTP to the emulator.
+- **Rationale presented by the agent, accepted by Thyago:** Real HTTP calls through the real client, without writing to the real bucket.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Options not chosen:**
+  - A fake client in memory. Fastest, no new service, and it does not exercise the real client or HTTP.
+  - The real bucket under a test prefix. Most realistic, and test objects would stay forever, since `bsi-ingest` cannot delete (D-043).
+- **Trade-off:** One more container in the test run. The emulator does not enforce IAM, so the no-overwrite rule is tested through an upload precondition (AD-050), not through permissions.
+- **How I would know I was wrong:** A test passes on the emulator and the same call fails on the real bucket in T6.
+
+### D-056: The checksum manifest is a table in the data Postgres
+
+- **Status:** Decided by Thyago, 2026-11-04. He chose "Table in data Postgres", the agent's recommendation.
+- **Question asked by the agent:** Where does the checksum manifest live (D-030)?
+- **Choice:** `raw.ingest_manifest`, one row per object written to the raw bucket, defined in `sql/raw/001_ingest_manifest.sql`.
+- **Rationale presented by the agent, accepted by Thyago:** Easy to query, and the hourly load DAG (T9) reads it to find new objects.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Option not chosen:** A JSON object in GCS. All of raw in one place, but the manifest would itself be write-once, so one object per fetch, and every lookup would mean listing objects.
+- **Trade-off:** The manifest lives on the laptop. If the data Postgres is lost, it can be rebuilt by listing the bucket, since every object carries its SHA-256 in its metadata.
+
+### Agent defaults to review (Stage 8)
+
+#### AD-047: Emulator version and settings (agent default)
+
+- **Choice:** `fsouza/fake-gcs-server:1.56.1`, plain HTTP on port 4443, in-memory backend. No healthcheck in the image, so the test fixture waits up to 20 seconds for it to answer.
+- **Open check:** Whether this emulator supports upload preconditions (`ifGenerationMatch`). The overwrite test answers it on the first green run.
+- **Thyago must confirm.**
+
+#### AD-048: Manifest schema (agent default)
+
+- **Choice:** Primary key on `object_path`. A unique constraint on `(source, period, source_name, sha256)`, so the same content is recorded once even if two runs race. `size_bytes` must be zero or more.
+- **Thyago must confirm.**
+
+#### AD-049: Upload first, then record the manifest row (agent default)
+
+- **Choice:** The object is uploaded, then the manifest row is inserted.
+- **Why the agent picked it:** The manifest never points at an object that does not exist, so the load DAG never fails on a missing file.
+- **Trade-off:** If the process dies between the upload and the insert, an object exists with no manifest row. The next run re-uploads the same content under a new path. The orphan is harmless, because loads read the manifest only, and it costs storage until someone cleans it up by hand.
+- **Alternative:** Insert a `pending` row first, upload, then mark it `uploaded`. No orphans, and one more state to handle.
+- **Thyago must confirm.**
+
+#### AD-050: Uploads use the precondition "object must not exist" (agent default)
+
+- **Choice:** Every upload sends `if_generation_match=0`. GCS rejects the write if any object already sits at that path.
+- **Why the agent picked it:** A second guard next to IAM (D-043). It also makes the no-overwrite rule testable on the emulator, which has no IAM.
+- **Thyago must confirm.**
+
+#### AD-051: T4 covers upload from a local file; the HTTP download moves to T6 (agent default)
+
+- **Choice:** `upload_if_changed()` takes a local temp file (D-053). Downloading from Receita into that temp file is written in T6, together with the DAG that calls both.
+- **Why the agent picked it:** It keeps T4 to one weekday lab, and the download needs real network tests that fit better with the end-to-end run.
+- **Thyago must confirm.**

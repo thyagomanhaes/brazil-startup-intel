@@ -23,7 +23,7 @@
 #   - LocalExecutor instead of CeleryExecutor. Redis, airflow-worker and flower removed (D-049).
 #   - Example DAGs off (AD-038).
 #   - data-postgres service added for project data (D-051, AD-036).
-#   - tests service added for pytest (D-050).
+#   - tests service added for pytest (D-050), with a GCS emulator (D-055).
 #
 # WARNING: This configuration is for local development. Do not use it in a production deployment.
 #
@@ -297,6 +297,13 @@ services:
       start_period: 5s
     restart: always
 
+  # GCS emulator for tests only (D-055, AD-047). In-memory, plain HTTP, no auth.
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.56.1
+    profiles:
+      - test
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "fake-gcs:4443", "-backend", "memory"]
+
   # Test runner (D-050). Run with: docker compose --profile test run --rm tests
   tests:
     build: ./docker/tests
@@ -304,6 +311,8 @@ services:
       - test
     environment:
       DATA_PG_DSN: postgresql://bsi:${DATA_PG_PASSWORD}@data-postgres:5432/bsi
+      # Points google-cloud-storage at the emulator, never at the real bucket (D-055).
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
     volumes:
       - ./:/repo
     working_dir: /repo
@@ -312,6 +321,8 @@ services:
     depends_on:
       data-postgres:
         condition: service_healthy
+      fake-gcs:
+        condition: service_started
 
 volumes:
   postgres-db-volume:
