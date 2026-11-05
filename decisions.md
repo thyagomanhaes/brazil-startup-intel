@@ -1113,3 +1113,9 @@ Closed 2026-11-04, seven days before the planned date for T3. AD-044 to AD-046 c
 - **Choice:** `upload_if_changed()` takes a local temp file (D-053). Downloading from Receita into that temp file is written in T6, together with the DAG that calls both.
 - **Why the agent picked it:** It keeps T4 to one weekday lab, and the download needs real network tests that fit better with the end-to-end run.
 - **Thyago must confirm.**
+
+### Task T4 result (2026-11-04)
+
+- Red: `No module named 'bsi.uploader'`, after `google.cloud.storage` and `psycopg` imported fine.
+- Green on Thyago's machine: **28 passed in 2.93s** (1 from T1, 21 from T3, 6 from T4). The agent could not run these 6 before handing them over, since its environment has neither the emulator nor Postgres.
+- **AD-047 open check closed:** `test_existing_path_is_never_overwritten` passed, so `fake-gcs-server` 1.56.1 honours the `ifGenerationMatch=0` precondition on resumable uploads.
