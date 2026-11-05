@@ -65,7 +65,7 @@ Each task starts with a failing test.
 
 | Day | Task | Test first | Decisions |
 |---|---|---|---|
-| Mon 09/11 | **T1.** `docker-compose.yml` from the official Airflow file, plus a data Postgres service. `pytest` wired up | A smoke test connects to the data Postgres and runs `SELECT 1` | D-028 |
+| Tue 03/11 (moved up from Mon 09/11) | **T1.** `docker-compose.yml` from the official Airflow file, plus a data Postgres service. `pytest` wired up | A smoke test connects to the data Postgres and runs `SELECT 1` | Done 2026-11-04. D-049 to D-051, AD-036 to AD-040 |
 | Tue 10/11 | **T2.** Check the Receita download page and the layout PDF. Write `docs/sources/cnpj.md`: URL, file list, columns, encoding, separator, oldest month available | No code. Closes A-003 (partner columns) and A-004 (months back to 2022-07) | A-003, A-004 |
 | Wed 11/11 | **T3.** `object_path(source, competencia, fetched_on, filename)` and `sha256_stream()` | Path matches `raw/cnpj/2026-10/fetched=2026-11-09/Empresas0.zip`. Checksum of a fixture matches a known value | D-030, D-046 |
 | Thu 12/11 | **T4.** `upload_if_changed(url, path)`: resumable upload, manifest entry, skip when an object with the same checksum exists, new fetch-date path when the checksum differs | Uploading the same fixture twice creates one object and one manifest entry. A changed fixture creates a second object and never overwrites the first | D-027, D-030, D-043, D-046 |

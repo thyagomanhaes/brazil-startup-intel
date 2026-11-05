@@ -799,3 +799,115 @@ Closed 2026-11-03, three days before the planned date for task P2. Format: conte
 - How I would know I was wrong: The public and private logs drift apart, or a technical decision is missing from the public one.
 
 **Repository:** https://github.com/thyagomanhaes/brazil-startup-intel (public, first commit on 2026-11-03).
+
+---
+
+## Stage 5: Task T1, local stack (2026-11-03, moved up from 2026-11-09)
+
+### Facts checked on 2026-11-03
+
+- The current Airflow release is 3.3.2. Its official `docker-compose.yaml` uses CeleryExecutor with Redis and a worker, plus scheduler, DAG processor, API server, triggerer, init and a Postgres metadata database. The docs ask for at least 4 GB of RAM for Docker, 8 GB recommended. Default UI login is `airflow` / `airflow` on port 8080. Source: https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html
+- The agent's network could not download the file. Thyago downloads it on his machine, so the base file is the untouched official one, and the changes on top of it are visible in the first diff.
+
+### D-049: LocalExecutor instead of CeleryExecutor
+
+- **Status:** Decided by Thyago, 2026-11-03. He chose "LocalExecutor", the agent's recommendation.
+- **Question asked by the agent:** The official 3.3.2 compose uses CeleryExecutor with Redis and worker containers. Which executor?
+- **Choice:** LocalExecutor. Redis, the Celery worker and Flower are removed from the official file.
+- **Rationale presented by the agent, accepted by Thyago:** Fewer containers and less RAM on a laptop. Hourly DAGs do not need distributed workers.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Option not chosen:** CeleryExecutor, the official file as published. Closer to a multi-worker setup, heavier on RAM.
+- **Trade-off:**
+  - Latency and throughput: tasks run as processes next to the scheduler, so parallelism is bounded by the laptop.
+  - Maintenance: the compose file diverges from the official one, so each Airflow upgrade means re-applying the same edits.
+  - Operational complexity: three fewer containers to start, watch and debug.
+- **How I would know I was wrong:** The backfill in T12 queues for a long time because tasks cannot run in parallel, or a task needs isolation that a separate worker would give.
+
+### D-050: Tests run in a dedicated container
+
+- **Status:** Decided by Thyago, 2026-11-03. He chose "Test container", the agent's recommendation.
+- **Choice:** A `tests` service built from `docker/tests/Dockerfile` (python:3.12-slim, pytest, psycopg). It runs `pytest -q tests` against the compose network.
+- **Rationale presented by the agent, accepted by Thyago:** Same result on any machine, and no dependency on the Windows Python install.
+- **Option not chosen:** A virtualenv on Windows, hitting Postgres on localhost. Faster loop, tied to the local Python.
+- **Trade-off:** Each test run starts a container, a few seconds slower than a local run. CI can reuse the same image later.
+
+### D-051: The data database is Postgres 16
+
+- **Status:** Decided by Thyago, 2026-11-03. He chose "Postgres 16".
+- **Choice:** `postgres:16` for the data database, separate from the Airflow metadata database.
+- **Rationale presented by the agent, accepted by Thyago:** The official Airflow compose uses the same major version for its metadata database, so one image covers both.
+- **Option not chosen:** Postgres 17.
+
+### Agent defaults to review (Stage 5)
+
+#### AD-036: Data Postgres connection settings (agent default)
+
+- **Choice:** Service `data-postgres`. Database `bsi`, user `bsi`, password from `DATA_PG_PASSWORD` in `.env` (gitignored, with `.env.example` committed). Host port 5433, so it does not clash with the Airflow metadata Postgres or any Postgres already running on the laptop. Data in a named volume `data-pg`.
+- **Thyago must confirm.**
+
+#### AD-037: The test reads its target from DATA_PG_DSN (agent default)
+
+- **Choice:** The smoke test takes its connection string from the `DATA_PG_DSN` environment variable, set by the `tests` service.
+- **Why the agent picked it:** The same test runs against any database without code changes.
+- **Thyago must confirm.**
+
+#### AD-038: Example DAGs off (agent default)
+
+- **Choice:** `AIRFLOW__CORE__LOAD_EXAMPLES` set to `'false'`. The official file ships it as `'true'`.
+- **Why the agent picked it:** The UI then shows only the project's own DAGs.
+- **Thyago must confirm.**
+
+### Changes applied to the official compose file (2026-11-03)
+
+Base: the untouched official Airflow 3.3.2 `docker-compose.yaml`, downloaded by Thyago. Edits:
+
+- Executor set to LocalExecutor. Celery broker and result backend variables removed (D-049).
+- `redis` service, `airflow-worker` service and `flower` service removed. Redis removed from the shared `depends_on` (D-049).
+- Example DAGs off (AD-038).
+- `tests` service added, behind the `test` profile (D-050). At this point it has no `data-postgres` to reach, on purpose: the first run must fail (TDD red).
+
+#### AD-039: Secrets stay out of test output and the data database stays on localhost (agent default)
+
+- **Context:** The first failing run printed the full connection parameters, password included, because pytest's default traceback shows function arguments.
+- **Choice:** pytest runs with `--tb=short`, which drops function arguments from failure output. The data Postgres port is bound to `127.0.0.1:5433`, not to every network interface. Compose refuses to start the database if `DATA_PG_PASSWORD` is missing from `.env`.
+- **Why the agent picked it:** A password in test output ends up in terminals, chat logs and CI logs. A database port open on every interface is reachable from any device on the same Wi-Fi.
+- **Thyago must confirm.**
+
+#### AD-040: Fernet key set, Airflow UI on localhost, generated config ignored (agent default)
+
+- **Context:** After the first `docker compose up`, Compose warned that `FERNET_KEY` was blank, and the API server listened on `0.0.0.0:8080` with the default login `airflow` / `airflow`.
+- **Choice:**
+  - `FERNET_KEY` generated once and stored in `.env`, before any Airflow connection is created. With a blank key, connection passwords sit unencrypted in the metadata database, and setting a key later means re-encrypting what is already there.
+  - The UI port bound to `127.0.0.1:8080`, the same rule as the data database (AD-039).
+  - `config/airflow.cfg`, generated by `airflow-init`, added to `.gitignore`.
+- **Thyago must confirm.**
+
+### Task T1 result (2026-11-04)
+
+- `docker compose ps`: `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-triggerer`, `postgres` (Airflow metadata) and `data-postgres` all up and healthy. `data-postgres` on `127.0.0.1:5433`.
+- TDD: the smoke test failed first with `failed to resolve host 'data-postgres'` (no database yet), then ran against the new `data-postgres` service.
+
+### Stage 5 consolidated summary
+
+Closed 2026-11-04, five days before the planned date for T1. Format: context → alternatives → choice → expected consequence → how I would know I was wrong.
+
+**1. Local Airflow (D-049, AD-038, AD-040)**
+- Context: The official Airflow 3.3.2 compose runs CeleryExecutor with Redis and a worker, and asks for 4 GB to 8 GB of RAM.
+- Alternatives: The official file as published.
+- Choice: LocalExecutor, with Redis, worker and Flower removed. Example DAGs off. UI on localhost only, Fernet key set.
+- Expected consequence: Six containers instead of nine, all healthy on a laptop.
+- How I would know I was wrong: The T12 backfill queues for a long time, or an Airflow upgrade breaks the edited file.
+
+**2. A separate data database (D-051, AD-036, AD-039)**
+- Context: Project data and Airflow's own metadata have different lifecycles.
+- Alternatives: Postgres 17. Reusing the Airflow metadata database.
+- Choice: `data-postgres`, Postgres 16, database `bsi`, on `127.0.0.1:5433`, in its own volume, with a required password.
+- Expected consequence: Dropping or rebuilding project data never touches Airflow, and the reverse.
+- How I would know I was wrong: Airflow tasks cannot reach `data-postgres` on the compose network in T7.
+
+**3. Tests that run anywhere (D-050, AD-037)**
+- Context: Every task in the plan starts with a failing test.
+- Alternatives: A virtualenv on Windows.
+- Choice: A `tests` container that waits for a healthy database and reads its target from `DATA_PG_DSN`. Short tracebacks, so secrets stay out of failure output.
+- Expected consequence: `docker compose --profile test run --rm tests` gives the same answer on any machine, and later in CI.
+- How I would know I was wrong: The test loop is slow enough that tasks skip the red step.
