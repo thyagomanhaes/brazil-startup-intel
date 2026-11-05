@@ -986,3 +986,49 @@ Closed 2026-11-04, six days before the planned date for T2. AD-036 to AD-043 con
 - Choice: All four columns stay in raw only. An empty document is an empty string, so the partner key works for foreign partners.
 - Expected consequence: Nothing personal beyond the partner name leaves raw.
 - How I would know I was wrong: The T10 leak test fails, or foreign partners collide on the key in T7.
+
+---
+
+## Stage 7: Task T3, object paths and streaming checksum (2026-11-04, moved up from 2026-11-11)
+
+### D-053: Download to a temp file while hashing, then upload
+
+- **Status:** Decided by Thyago, 2026-11-04. He chose "Temp file, then upload", the agent's recommendation.
+- **Question asked by the agent:** How do bytes go from Receita to GCS? This decides what `sha256_stream()` hashes.
+- **Choice:** Each source file is downloaded to a local temp file and hashed in the same pass. The checksum decides skip or upload (D-030). The upload then reads from the temp file.
+- **Rationale presented by the agent, accepted by Thyago:** A failed upload retries from disk, without downloading the file again from Receita.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Option not chosen:** Stream straight from Receita to GCS, hashing in one pass. No disk use. A broken connection means downloading that file again.
+- **Trade-off:**
+  - Disk: one part file at a time on the laptop, under 1 GB each (a 7.3 GB release split across 37 files).
+  - Latency: download and upload run one after the other, not overlapped.
+  - Reliability: the upload can be retried as often as needed, and the checksum is known before any byte reaches GCS.
+- **How I would know I was wrong:** The laptop runs out of disk during a download, or temp files pile up after failed runs.
+
+### D-054: The fetch part of the object path is a UTC timestamp
+
+- **Status:** Decided by Thyago, 2026-11-04. He chose "UTC timestamp", the agent's recommendation.
+- **Question asked by the agent:** What goes in the fetch part of the object path? Overwrite is blocked by IAM (D-043), so two different fetches must never get the same path.
+- **Choice:** `fetched=<YYYY-MM-DDTHHMMSSZ>`, in UTC, to the second. Example: `raw/cnpj/2026-10/fetched=2026-11-09T140300Z/Empresas0.zip`. Times in other timezones are converted to UTC. A datetime without a timezone is rejected.
+- **Thyago's own rationale:** Not stated beyond the choice.
+- **Option not chosen:** Date only, `fetched=2026-11-09`. Easier to read. A changed file fetched twice in one day would fail on the second upload.
+- **Trade-off:** Longer paths. Listing "everything fetched on a day" needs a prefix match on the date part, which the format still allows.
+
+### Agent defaults to review (Stage 7)
+
+#### AD-044: Path validation rules (agent default)
+
+- **Choice:** `object_path()` raises `ValueError` for an unknown source (allowed: `cnpj`, `cvm_registry`), a period that is not `YYYY-MM` or `YYYY-MM-DD` with a real month and day, and a filename that is empty, `..`, or contains `/` or `\`.
+- **Why the agent picked it:** Paths are the only key into write-once raw. A bad path written once stays forever (D-043).
+- **Thyago must confirm.**
+
+#### AD-045: Package in `src/bsi`, found by pytest through `pyproject.toml` (agent default)
+
+- **Choice:** Code lives in `src/bsi/`. `pyproject.toml` sets pytest's `pythonpath` to `src`, so tests import `bsi` without installing it.
+- **Thyago must confirm.**
+
+#### AD-046: 8 MiB read chunks (agent default)
+
+- **Choice:** `sha256_stream()` reads 8 MiB at a time by default.
+- **Why the agent picked it:** Memory stays flat for any file size. 8 MiB is a multiple of 256 KiB, the chunk unit GCS resumable uploads require, so the same size can be reused in T4.
+- **Thyago must confirm.**
